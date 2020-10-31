@@ -106,7 +106,7 @@ func main() {
 	}
 
 	log.Println("搜索未终止的订单 ...")
-	lotCodes := make([]string, 0)
+	lotCodes := make([][]string, 0)
 
 	for _, v := range soDoc {
 		for _, r := range srcDoc {
@@ -116,7 +116,7 @@ func main() {
 				}
 				lot := r["TotalNumber"]
 				if len(lot) > 0 {
-					lotCodes = append(lotCodes, lot)
+					lotCodes = append(lotCodes, []string{r["OrderNumber"], lot})
 				}
 			}
 		}
@@ -125,20 +125,35 @@ func main() {
 	u9db := db.Mssql("u928")
 
 	if len(lotCodes) > 0 {
-		log.Printf("找到总编号：%v", lotCodes)
+		lotCodeList := make([]string, 1)
+		for _, row := range lotCodes {
+			lotCodeList = append(lotCodeList, row[1])
+		}
+		log.Printf("找到总编号：%v", lotCodeList)
 
 		log.Println("在U9系统查询总编号是否存在 ...")
 		if err := u9db.DB().Ping(); err != nil {
 			log.Fatalf("数据库连接错误: %s", err)
 		}
-		lotQuery := u9db.SQL(`select LotCode from Lot_LotMaster where LotCode in (` + GetSQLValueList(lotCodes) + `)`)
+		lotQuery := u9db.SQL(`select LotCode from Lot_LotMaster where LotCode in (` + GetSQLValueList(lotCodeList) + `)`)
 		srcLot, err := lotQuery.QueryString()
 		if err != nil {
 			log.Fatalf("数据库查询错误：%s", err)
 		}
 		if len(srcLot) > 0 {
 			for _, r := range srcLot {
-				log.Printf("在U9系统中找到总编号: %s", r["LotCode"])
+				srcLotCode := r["LotCode"]
+				soFound := false
+				for _, row := range lotCodes {
+					if row[1] == srcLotCode {
+						log.Printf("在U9系统中找到总编号: %s, 所属订单号:%s", row[1], row[0])
+						soFound = true
+						break
+					}
+				}
+				if !soFound {
+					log.Printf("在U9系统中找到总编号: %s, 所属订单号:%s", srcLotCode, "<未知>")
+				}
 			}
 		}
 	} else {
