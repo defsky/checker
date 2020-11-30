@@ -31,21 +31,29 @@ var needArchive, needPrintSrcData bool
 
 func main() {
 	flag.StringVar(&excelFile, "d", "", "data file with excel format(*.xlsx)")
-	flag.StringVar(&headFile, "h", "", "header defination file in Comma-Separated Values")
+	// flag.StringVar(&headFile, "h", "", "header defination file in Comma-Separated Values")
 	flag.BoolVar(&needArchive, "a", false, "archiving flag, archive the source data to history db or not")
 	flag.BoolVar(&needPrintSrcData, "p", false, "print flag, print source data or not")
 	flag.Parse()
 
 	log.Println("data checker v1.0")
+	config.Init()
+
+	headFile = config.GetConfig().Target
 	if len(headFile) <= 0 {
-		log.Fatalln("need header defination")
+		log.Fatalln("need header defination in config.yml")
 	}
 	if len(excelFile) <= 0 {
 		log.Fatalln("need data file with excel format(*.xlsx)")
 	}
 
-	header, end := GetHeader(headFile)
-	log.Printf("表头定义：%v, 结束标记: %s", header, end)
+	// header, end := GetHeader(headFile)
+	header, end := GetHeaders(headFile)
+
+	if len(header) > 0 {
+		log.Printf("表头定义：%v, 结束标记: %s", header, end)
+
+	}
 
 	data := LoadData(excelFile, header, end, needPrintSrcData)
 
@@ -71,7 +79,6 @@ func main() {
 	}
 
 	log.Println("初始化数据库连接 ...")
-	config.Init()
 	db.Init()
 
 	storedb := db.Mssql("store")
@@ -246,21 +253,40 @@ func main() {
 				}
 			}
 		}
-		histArchive := testdb.SQL(`INSERT INTO [dbo].[Store_DepositReturn] ([TotalMoney],[DocNo]) VALUES ` + values)
-		res, err := histArchive.Execute()
-		if err != nil {
-			log.Printf("写入归档库时出错：%s", err)
-		} else {
-			affected, err := res.RowsAffected()
+		if len(values) > 0 {
+			histArchive := testdb.SQL(`INSERT INTO [dbo].[Store_DepositReturn] ([TotalMoney],[DocNo]) VALUES ` + values)
+			res, err := histArchive.Execute()
 			if err != nil {
-				log.Printf("获取归档执行结果错误：%s", err)
+				log.Printf("写入归档库时出错：%s", err)
 			} else {
-				log.Printf("已归档数据条数: %d", affected)
+				affected, err := res.RowsAffected()
+				if err != nil {
+					log.Printf("获取归档执行结果错误：%s", err)
+				} else {
+					log.Printf("已归档数据条数: %d", affected)
+				}
 			}
+		} else {
+			log.Printf("历史归档中已存在所有数据，没有需要归档的数据")
 		}
 	} else {
 		log.Printf("不需要归档，处理结束")
 	}
+}
+
+// GetHeaders ...
+func GetHeaders(s string) ([]string, string) {
+	e := strings.Split(s, ":")
+	if len(e) < 2 {
+		log.Fatalln("表头定义中没有找到数据结束标记")
+	}
+	eflags := strings.TrimSpace(e[1])
+
+	h := strings.Split(e[0], ",")
+	for i, v := range h {
+		h[i] = strings.TrimSpace(v)
+	}
+	return h, eflags
 }
 
 // GetHeader ...
