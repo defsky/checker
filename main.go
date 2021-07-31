@@ -67,7 +67,15 @@ func main() {
 	report := make([]string, 0)
 
 	log.Println("检查重复项 ...")
-	soDoc, err := data.GetColumnByName("销售订单号")
+	soDocNoColName := ""
+	for k, v := range data.Header {
+		if k == 1 {
+			soDocNoColName = v
+			break
+		}
+	}
+	//soDoc, err := data.GetColumnByName("销售订单号")
+	soDoc, err := data.GetColumnByName(soDocNoColName)
 	if err != nil {
 		log.Println(err)
 	}
@@ -108,7 +116,8 @@ func main() {
 	log.Println("查询需要核对的订单信息 ...")
 	srcDoc, err := soDocQuery.QueryString()
 	if err != nil {
-		log.Fatalf("数据库查询错误：%s", err)
+		sqlText, _ := soDocQuery.LastSQL()
+		log.Fatalf("数据库查询错误：%s", err.Error()+"\n"+sqlText)
 	}
 	srcCount := len(srcDoc)
 	log.Printf("找到源单据条数：%d", srcCount)
